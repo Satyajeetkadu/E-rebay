@@ -1,35 +1,54 @@
 # importing required modules
 import PyPDF2
 import re
+from datetime import datetime
 import pandas as pd
 import os
 
 def get_index(firstIndex,string):
     return int(firstIndex)+int(len(string))
 
-def create_loan(text,on_page_2,completeDF,balance = 0):
-    completeDF = {"type":[],"institution":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[]}
+def save_as_csv(data_df,pivot_df,csv,filename):
+    if(csv):
+        data_df.to_csv(f'{filename}_1.csv',index=False)
+        pivot_df.to_csv(f'{filename}_2.csv',index=True)
+    else:
+        with pd.ExcelWriter(f'{filename}.xlsx') as writer:
+            data_df.to_excel(writer,sheet_name='Sheet1',index=False)
+            pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
+
+def create_loan(text,completeDF):
+    completeDF = {"type":[],"institution":[],"date_opened":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[]}
     countAcc = text.count("Acct # :")
     for _ in range(countAcc):
-        loan = dict()
         delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
         openIndex = get_index(text.find('Open: '),'Open: ')
         openValue = text[openIndex:(text.find("Date Reported: "))].strip()
+
+        dateOpenedIndex = get_index(text.find('Date Opened: '),'Date Opened: ')
+        dateOpenedValue = text[dateOpenedIndex:(text.find("Type: "))].strip()
+        try:
+            date_object = datetime.strptime(dateOpenedValue, '%d-%m-%Y').date()
+        except ValueError:
+            pass
         # print(text)
-        if(on_page_2):
-            balanceIndex = get_index(text.find('Balance: '),'Balance: ')
-            balance = text[balanceIndex:(text.find('Open:'))]
-            if(balance[0] == "R"):
-                balance = balance[4:]
-            balance = int(balance.replace(',',''))
+        balanceIndex = get_index(text.find('Balance: '),'Balance: ')
+        balance = text[balanceIndex:(text.find('Open:'))]
+        if(balance[0] == "R"):
+            balance = balance[4:]
+        balance = int(balance.replace(',',''))
         # Find institution
         instiutionIndex = get_index(text.find('Institution : '),'Institution : ')
         instiutionName = text[instiutionIndex:(text.find('Past Due Amount'))-1]
+
         # Find type of loan
         typeIndex = get_index(text.find('Type: '),'Type: ')
         typeName = text[typeIndex:(text.find('Last Payment:'))-1]
+
+        # TODO:::::::: FILL NAMES OF LOAN TYPES
+
         if(typeName not in ["Personal Loan","Business Loan","Credit Card","","Auto Loan"]):
             typeName = "4_Others"
         elif(typeName == "Credit Card"):
@@ -50,10 +69,13 @@ def create_loan(text,on_page_2,completeDF,balance = 0):
             except ValueError:
                 emiValue = 0
         
-        if(typeName == 'Credit Card'):
+        if(typeName == '1_CreditCard'):
             creditIndex = get_index(text.find('Credit Limit:'),"Credit Limit: Rs. ")
             creditLimit = text[creditIndex:text.find('Collateral Value')-1]
-            sanction_credit = int(creditLimit.replace(',',''))
+            try:
+                sanction_credit = int(creditLimit.replace(',',''))
+            except ValueError:
+                sanction_credit = 0
             emiValue = balance*0.05
         else:
             sanctionIndex = get_index(text.find('Sanction Amount :'),"Sanction Amount : ")
@@ -81,6 +103,7 @@ def create_loan(text,on_page_2,completeDF,balance = 0):
         completeDF['paid_principle'].append(int(sanction_credit-balance))
         completeDF['open'].append(openValue)
         completeDF['delinquecy'].append(delinquecy)
+        completeDF['date_opened'].append(date_object)
     return completeDF
 
 folder_loc = input("Enter folder location:")
@@ -88,39 +111,29 @@ folder_loc = input("Enter folder location:")
 files = os.listdir(folder_loc)
 # Create a list of all files with .pdf extension
 pdf_files = [f for f in files if f.endswith('.pdf')]
-finalDF = {"type":[],"institution":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[]}
+finalDF = {"type":[],"institution":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[],"date_opened":[]}
 for file in pdf_files:
     print("For name",file)
     salary = int(input("enter salary:"))
-    pdfFileObj = open(folder_loc+file, 'rb')
+    pdfFileObj = open(folder_loc+"/"+file, 'rb')
+    complete_String = ""
     pdfReader = PyPDF2.PdfFileReader(pdfFileObj)
     for i in range(pdfReader.numPages):
         pageObj = pdfReader.getPage(i).extract_text()
-        on_page_2  = True
-        balance = 0
-        if(i == 0):
-            riskIndex = get_index(pageObj.find("Equifax Risk Score 3.1 "), "Equifax Risk Score 3.1 ")
-            riskValue = int(pageObj[riskIndex:(pageObj.find("1. "))].strip())
-            try:
-                pageObj.index("Account Details :")
-                on_page_2 = False
-            except ValueError:
-                on_page_2 = True
-        if not on_page_2:
-            balanceIndex = get_index(pageObj.find('Balance: '),'Balance: ')
-            balance = pageObj[balanceIndex:(pageObj.find('Open:'))]
-            if(balance[0] == "R"):
-                balance = balance[4:]
-            balance = int(balance.replace(',',''))
-        newDF = create_loan(pageObj,on_page_2,finalDF,balance)
-        [finalDF["type"].append(i) for i in newDF["type"]]
-        [finalDF["institution"].append(i) for i in newDF["institution"]]
-        [finalDF["sanction_credit"].append(i) for i in newDF["sanction_credit"]]
-        [finalDF["balance"].append(i) for i in newDF["balance"]]
-        [finalDF["emi"].append(i) for i in newDF["emi"]]
-        [finalDF["paid_principle"].append(i) for i in newDF["paid_principle"]]
-        [finalDF['open'].append(i) for i in newDF["open"]]
-        [finalDF['delinquecy'].append(i) for i in newDF["delinquecy"]]
+        complete_String += pageObj
+    riskIndex = get_index(complete_String.find("Equifax Risk Score 3.1 "), "Equifax Risk Score 3.1 ")
+    riskValue = int(complete_String[riskIndex:(complete_String.find("1. "))].strip())
+    print(riskValue)
+    newDF = create_loan(complete_String,finalDF)
+    [finalDF["type"].append(i) for i in newDF["type"]]
+    [finalDF["institution"].append(i) for i in newDF["institution"]]
+    [finalDF["sanction_credit"].append(i) for i in newDF["sanction_credit"]]
+    [finalDF["balance"].append(i) for i in newDF["balance"]]
+    [finalDF["emi"].append(i) for i in newDF["emi"]]
+    [finalDF["paid_principle"].append(i) for i in newDF["paid_principle"]]
+    [finalDF['open'].append(i) for i in newDF["open"]]
+    [finalDF['delinquecy'].append(i) for i in newDF["delinquecy"]]
+    [finalDF['date_opened'].append(i) for i in newDF["date_opened"]]
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
         'Yes': True,
@@ -144,8 +157,6 @@ for file in pdf_files:
     else:
         delinquency = False
     disposable = FOIR - data_df['emi'].sum()
-    # add a sum row to the dataframe
-    # pd.concat([data_df,pd.DataFrame(sum_df,index=[0])],ignore_index=True)
     # -------------------OUTPUT-------------------
     print("FOIR: ",FOIR)
     print("emi",data_df['emi'].sum())
@@ -158,8 +169,7 @@ for file in pdf_files:
             print("You are eligible for loan")
         else:
             print("You are not eligible for loan")
-    data_df.drop(['open'],axis=1,inplace=True)
-    data_df.set_index('type',inplace=True)
+    # data_df.drop(['open'],axis=1,inplace=True)
     sum_df = {
         'type': 'Total',
         'sanction_credit': data_df['sanction_credit'].sum(),
@@ -176,5 +186,4 @@ for file in pdf_files:
     pivot_df = pivot_df.append(sum_df,ignore_index=True)
     pivot_df.set_index('type',inplace=True)
     filename = os.path.basename(file).split('.')[0]
-    data_df.to_csv(f'{filename}_1.csv',index=False)
-    pivot_df.to_csv(f'{filename}_2.csv',index=False)
+    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
