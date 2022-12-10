@@ -17,10 +17,13 @@ def save_as_csv(data_df,pivot_df,csv,filename):
             data_df.to_excel(writer,sheet_name='Sheet1',index=False)
             pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
 
-def create_loan(text,completeDF):
+def create_loan(text):
     completeDF = {"type":[],"institution":[],"date_opened":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[]}
+    list1 = []
     countAcc = text.count("Acct # :")
-    for _ in range(countAcc):
+    for i in range(countAcc):
+        list1.append(i)
+        print(list1)
         delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
@@ -111,7 +114,6 @@ folder_loc = input("Enter folder location:")
 files = os.listdir(folder_loc)
 # Create a list of all files with .pdf extension
 pdf_files = [f for f in files if f.endswith('.pdf')]
-finalDF = {"type":[],"institution":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[],"date_opened":[]}
 for file in pdf_files:
     print("For name",file)
     salary = int(input("enter salary:"))
@@ -124,16 +126,7 @@ for file in pdf_files:
     riskIndex = get_index(complete_String.find("Equifax Risk Score 3.1 "), "Equifax Risk Score 3.1 ")
     riskValue = int(complete_String[riskIndex:(complete_String.find("1. "))].strip())
     print(riskValue)
-    newDF = create_loan(complete_String,finalDF)
-    [finalDF["type"].append(i) for i in newDF["type"]]
-    [finalDF["institution"].append(i) for i in newDF["institution"]]
-    [finalDF["sanction_credit"].append(i) for i in newDF["sanction_credit"]]
-    [finalDF["balance"].append(i) for i in newDF["balance"]]
-    [finalDF["emi"].append(i) for i in newDF["emi"]]
-    [finalDF["paid_principle"].append(i) for i in newDF["paid_principle"]]
-    [finalDF['open'].append(i) for i in newDF["open"]]
-    [finalDF['delinquecy'].append(i) for i in newDF["delinquecy"]]
-    [finalDF['date_opened'].append(i) for i in newDF["date_opened"]]
+    finalDF = create_loan(complete_String)
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
         'Yes': True,
@@ -187,3 +180,6 @@ for file in pdf_files:
     pivot_df.set_index('type',inplace=True)
     filename = os.path.basename(file).split('.')[0]
     save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
+
+# regex for month-date
+# month_date = re.compile(r'(\d{1,2})-(\d{1,2})')
