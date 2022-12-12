@@ -2,21 +2,33 @@
 import PyPDF2
 import numpy as np
 import re
-from datetime import datetime
+import datetime
 import pandas as pd
 import os
 
 def get_index(firstIndex,string):
     return int(firstIndex)+int(len(string))
 
-def save_as_csv(data_df,pivot_df,csv,filename):
+def save_as_csv(data_df,pivot_df,rec_df,csv,filename,info_df):
+    data_df.drop(['date_opened'],axis=1,inplace=True)
+    info_df.set_index('Name',inplace=True)
+    # drop row total 
+    # data_df.drop(pivot_df.tail(1).index,inplace=True)
     if(csv):
         data_df.to_csv(f'{filename}_1.csv',index=False)
         pivot_df.to_csv(f'{filename}_2.csv',index=True)
+        info_df.to_csv(f'{filename}_4.csv',index=True)
+        rec_df.to_csv(f'{filename}_3.csv',index=True)
+
     else:
         with pd.ExcelWriter(f'{filename}.xlsx') as writer:
             data_df.to_excel(writer,sheet_name='Sheet1',index=False)
             pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
+            info_df.to_excel(writer,sheet_name='Sheet4',index=True)
+            rec_df.to_excel(writer,sheet_name='Sheet3',index=True)
+
+def diff_month(d1, d2):
+    return (d1.year - d2.year) * 12 + d1.month - d2.month
 
 def create_loan(text):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
@@ -31,7 +43,7 @@ def create_loan(text):
         dateOpenedIndex = get_index(text.find('Date Opened: '),'Date Opened: ')
         dateOpenedValue = text[dateOpenedIndex:(text.find("Type: "))].strip()
         try:
-            date_object = datetime.strptime(dateOpenedValue, '%d-%m-%Y').date()
+            date_object = datetime.datetime.strptime(dateOpenedValue, '%d-%m-%Y').date()
         except ValueError:
             pass
         # print(text)
@@ -129,7 +141,10 @@ for file in pdf_files:
         complete_String += pageObj
     riskIndex = get_index(complete_String.find("Equifax Risk Score 3.1 "), "Equifax Risk Score 3.1 ")
     riskValue = int(complete_String[riskIndex:(complete_String.find("1. "))].strip())
-    print(riskValue)
+
+    nameIndex = get_index(complete_String.find("Consumer Name: "),"Consumer Name: ")
+    nameValue = complete_String[nameIndex:(complete_String.find("Personal Information"))].strip().capitalize()
+
     finalDF = create_loan(complete_String)
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
@@ -140,7 +155,6 @@ for file in pdf_files:
     data_df.sort_values(by=['Products'],ascending=True,inplace=True)
     data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']==True)]
     data_df['Paid Principle'] = data_df['Paid Principle'].apply(lambda x: 0 if x<0 else x)
-    data_df.groupby('Products').sum()
     if(salary <= 50000):
         FOIR = salary*0.5
     elif(salary > 50000 and salary <= 150000):
@@ -154,11 +168,32 @@ for file in pdf_files:
         delinquency = False
     disposable = FOIR - data_df['EMI'].sum()
     data_df.drop(['open'],axis=1,inplace=True)
-    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Balance','EMI','Paid Principle','Sanction/Credit Limit'], aggfunc=np.sum, fill_value=0)
+    total_dict = {
+        'Products': 'Total',
+        'Balance': data_df['Balance'].sum(),
+        'EMI': data_df['EMI'].sum(),
+        'Paid Principle': data_df['Paid Principle'].sum(),
+        'Sanction/Credit Limit': data_df['Sanction/Credit Limit'].sum(),
+        'Foir': FOIR,
+        'Disposable': disposable,
+        "salary": salary
+    }
+    total_dict = pd.DataFrame(total_dict,index=[0])
+    data_df = pd.concat([data_df,total_dict],ignore_index=False)
+    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Sanction/Credit Limit','Balance','EMI','Paid Principle'], aggfunc=np.sum, fill_value=0)
     pivot_df['FOIR'] = FOIR
     pivot_df['Disposable'] = disposable
+    # data_df['date_diff'] = data_df['date_opened'].apply(lambda x: diff_month(datetime.date.today(), x))
+    # data_df['date_diff'] = data_df['date_diff'].apply(lambda x: True if x < 12 else False)
+    # data_df.drop(data_df[(data_df['Products'] == '3_PersonalLoan') & (data_df['date_diff'] == True)].index, inplace = True)
+    info_df = {
+        "Name":[nameValue],
+        "Credit Score":[riskValue],
+        "Salary":[salary],
+    }
+    rec_df = dict()
     filename = os.path.basename(file).split('.')[0]
-    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
+    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=pd.DataFrame(rec_df))
 
 # regex for month-date
 # month_date = re.compile(r'(\d{1,2})-(\d{1,2})')
