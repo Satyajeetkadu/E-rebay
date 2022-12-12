@@ -41,7 +41,7 @@ def create_loan(text):
         try:
             date_object = datetime.strptime(dateOpenedValue, '%d-%m-%Y').date()
         except ValueError:
-            pass
+            date_object = 0
         # print(text)
         BalanceIndex = get_index(text.find('Balance: '),'Balance: ')
         Balance = text[BalanceIndex:(text.find('Open:'))]
@@ -170,7 +170,8 @@ for file in pdf_files:
         'Paid Principle': data_df['Paid Principle'].sum(),
         'Sanction/Credit Limit': data_df['Sanction/Credit Limit'].sum(),
         'Foir': FOIR,
-        'Disposable': disposable
+        'Disposable': disposable,
+        "salary": salary
     }
     total_dict = pd.DataFrame(total_dict,index=[0])
     data_df = pd.concat([data_df,total_dict],ignore_index=False)
