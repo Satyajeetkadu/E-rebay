@@ -9,12 +9,12 @@ import os
 def get_index(firstIndex,string):
     return int(firstIndex)+int(len(string))
 
-def save_as_csv(data_df,pivot_df,csv,filename):
+def save_as_csv(data_df,pivot_df,csv,filename,filePath):
     if(csv):
-        data_df.to_csv(f'{filename}_1.csv',index=False)
-        pivot_df.to_csv(f'{filename}_2.csv',index=True)
+        data_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_1.csv',index=False)
+        pivot_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_2.csv',index=True)
     else:
-        with pd.ExcelWriter(f'{filename}.xlsx') as writer:
+        with pd.ExcelWriter(f'{filePath}/excel/{filename}_CAR.xlsx') as writer:
             data_df.to_excel(writer,sheet_name='Sheet1',index=False)
             pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
 
@@ -154,9 +154,19 @@ for file in pdf_files:
         delinquency = False
     disposable = FOIR - data_df['EMI'].sum()
     data_df.drop(['open'],axis=1,inplace=True)
+    # create a total dictionary
+    total_dict = {
+        'Products': 'Total',
+        'Balance': data_df['Balance'].sum(),
+        'EMI': data_df['EMI'].sum(),
+        'Paid Principle': data_df['Paid Principle'].sum(),
+        'Sanction/Credit Limit': data_df['Sanction/Credit Limit'].sum(),
+        'Foir': FOIR,
+        'Disposable': disposable
+    }
+    total_dict = pd.DataFrame(total_dict,index=[0])
+    data_df = pd.concat([data_df,total_dict],ignore_index=False)
     pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Balance','EMI','Paid Principle','Sanction/Credit Limit'], aggfunc=np.sum, fill_value=0)
-    pivot_df['FOIR'] = FOIR
-    pivot_df['Disposable'] = disposable
     filename = os.path.basename(file).split('.')[0]
     save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
 
