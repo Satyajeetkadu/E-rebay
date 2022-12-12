@@ -1,5 +1,6 @@
 # importing required modules
 import PyPDF2
+import numpy as np
 import re
 from datetime import datetime
 import pandas as pd
@@ -18,12 +19,9 @@ def save_as_csv(data_df,pivot_df,csv,filename):
             pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
 
 def create_loan(text):
-    completeDF = {"type":[],"institution":[],"date_opened":[],"sanction_credit":[],"balance":[],"emi":[],"paid_principle":[],"open":[],"delinquecy":[]}
-    list1 = []
+    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
-        list1.append(i)
-        print(list1)
         delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
@@ -37,49 +35,55 @@ def create_loan(text):
         except ValueError:
             pass
         # print(text)
-        balanceIndex = get_index(text.find('Balance: '),'Balance: ')
-        balance = text[balanceIndex:(text.find('Open:'))]
-        if(balance[0] == "R"):
-            balance = balance[4:]
-        balance = int(balance.replace(',',''))
-        # Find institution
+        BalanceIndex = get_index(text.find('Balance: '),'Balance: ')
+        Balance = text[BalanceIndex:(text.find('Open:'))]
+        try:
+            if(Balance[0] == "R"):
+                Balance = Balance[4:]
+            elif(Balance == ""):
+                Balance = 0
+            try:
+                Balance = int(Balance.replace(',',''))
+            except ValueError:
+                Balance = 0
+        except IndexError:
+            Balance = 0
+        # Find Loan Institution
         instiutionIndex = get_index(text.find('Institution : '),'Institution : ')
         instiutionName = text[instiutionIndex:(text.find('Past Due Amount'))-1]
 
-        # Find type of loan
-        typeIndex = get_index(text.find('Type: '),'Type: ')
-        typeName = text[typeIndex:(text.find('Last Payment:'))-1]
+        # Find Products of loan
+        ProductsIndex = get_index(text.find('Type: '),'Type: ')
+        ProductsName = text[ProductsIndex:(text.find('Last Payment:'))-1]
 
-        # TODO:::::::: FILL NAMES OF LOAN TYPES
-
-        if(typeName not in ["Personal Loan","Business Loan","Credit Card","","Auto Loan"]):
-            typeName = "4_Others"
-        elif(typeName == "Credit Card"):
-            typeName = "1_CreditCard"
-        elif(typeName == "Personal Loan"):
-            typeName = "3_PersonalLoan"
-        elif(typeName == "Business Loan"):
-            typeName = "2_BusinessLoan"
+        if(ProductsName not in ["Personal Loan","Business Loan","Credit Card","","Auto Loan"]):
+            ProductsName = "4_Others"
+        elif(ProductsName == "Credit Card"):
+            ProductsName = "1_CreditCard"
+        elif(ProductsName == "Personal Loan"):
+            ProductsName = "3_PersonalLoan"
+        elif(ProductsName == "Business Loan"):
+            ProductsName = "2_BusinessLoan"
         # Find EMI
-        emiIndex = get_index(text.find('Monthly Payment Amount: '),'Monthly Payment Amount:')
-        emiValue = text[emiIndex:(text.find('Credit Limit:'))-1]
-        if(emiValue == ''):
-            emiValue = 0
+        EMIIndex = get_index(text.find('Monthly Payment Amount: '),'Monthly Payment Amount:')
+        EMIValue = text[EMIIndex:(text.find('Credit Limit:'))-1]
+        if(EMIValue == ''):
+            EMIValue = 0
         else:
-            emiValue = emiValue[4:]
+            EMIValue = EMIValue[4:]
             try:
-                emiValue = int(emiValue.replace(',',''))
+                EMIValue = int(EMIValue.replace(',',''))
             except ValueError:
-                emiValue = 0
+                EMIValue = 0
         
-        if(typeName == '1_CreditCard'):
+        if(ProductsName == '1_CreditCard'):
             creditIndex = get_index(text.find('Credit Limit:'),"Credit Limit: Rs. ")
             creditLimit = text[creditIndex:text.find('Collateral Value')-1]
             try:
                 sanction_credit = int(creditLimit.replace(',',''))
             except ValueError:
                 sanction_credit = 0
-            emiValue = balance*0.05
+            EMIValue = Balance*0.05
         else:
             sanctionIndex = get_index(text.find('Sanction Amount :'),"Sanction Amount : ")
             sanctionLimit = text[sanctionIndex:text.find('Reason:')]
@@ -98,14 +102,14 @@ def create_loan(text):
             delinquecy = False
         else:
             delinquecy = True
-        completeDF['balance'].append(int(balance))
-        completeDF['institution'].append(instiutionName.strip())
-        completeDF['type'].append(typeName.strip())
-        completeDF['sanction_credit'].append(int(sanction_credit))
-        completeDF['emi'].append(int(emiValue))
-        completeDF['paid_principle'].append(int(sanction_credit-balance))
+        completeDF['Balance'].append(int(Balance))
+        completeDF['Loan Institution'].append(instiutionName.strip())
+        completeDF['Products'].append(ProductsName.strip())
+        completeDF['Sanction/Credit Limit'].append(int(sanction_credit))
+        completeDF['EMI'].append(int(EMIValue))
+        completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
-        completeDF['delinquecy'].append(delinquecy)
+        completeDF['Delinquencies'].append(delinquecy)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
@@ -133,51 +137,26 @@ for file in pdf_files:
         'No': False
     })
     data_df = data_df.loc[data_df['open']==True]
-    data_df.sort_values(by=['type'],ascending=True,inplace=True)
-    data_df = data_df.loc[(data_df['balance']!=0) | (data_df['delinquecy']==True)]
-    data_df['paid_principle'] = data_df['paid_principle'].apply(lambda x: 0 if x<0 else x)
-    data_df.groupby('type').sum()
-    df1=pd.DataFrame()
+    data_df.sort_values(by=['Products'],ascending=True,inplace=True)
+    data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']==True)]
+    data_df['Paid Principle'] = data_df['Paid Principle'].apply(lambda x: 0 if x<0 else x)
+    data_df.groupby('Products').sum()
     if(salary <= 50000):
         FOIR = salary*0.5
     elif(salary > 50000 and salary <= 150000):
         FOIR = salary*0.6
     else:
         FOIR = salary*0.7
-    delinquency = data_df['delinquecy'].sum()
+    delinquency = data_df['Delinquencies'].sum()
     if(delinquency>0):
         delinquency = True
     else:
         delinquency = False
-    disposable = FOIR - data_df['emi'].sum()
-    # -------------------OUTPUT-------------------
-    print("FOIR: ",FOIR)
-    print("emi",data_df['emi'].sum())
-    print("Disposable: ",disposable)
-    print("Delinuency:",delinquency)
-    if(delinquency):
-        print("You have delinuency in your loan and you are not eligible for loan")
-    else:
-        if(disposable>0):
-            print("You are eligible for loan")
-        else:
-            print("You are not eligible for loan")
-    # data_df.drop(['open'],axis=1,inplace=True)
-    sum_df = {
-        'type': 'Total',
-        'sanction_credit': data_df['sanction_credit'].sum(),
-        'balance': data_df['balance'].sum(),
-        'emi': data_df['emi'].sum(),
-        'paid_principle': data_df['paid_principle'].sum(),
-        'delinquecy': data_df['delinquecy'].sum(),
-        'foir': FOIR,
-        'disposable': FOIR - data_df['emi'].sum(),
-    }
-    sum_df = pd.DataFrame(sum_df,index=[0])
-    pivot_df = data_df.groupby('type').sum()
-    pivot_df = pivot_df.reset_index()
-    pivot_df = pivot_df.append(sum_df,ignore_index=True)
-    pivot_df.set_index('type',inplace=True)
+    disposable = FOIR - data_df['EMI'].sum()
+    data_df.drop(['open'],axis=1,inplace=True)
+    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Balance','EMI','Paid Principle','Sanction/Credit Limit'], aggfunc=np.sum, fill_value=0)
+    pivot_df['FOIR'] = FOIR
+    pivot_df['Disposable'] = disposable
     filename = os.path.basename(file).split('.')[0]
     save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
 
