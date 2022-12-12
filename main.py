@@ -11,12 +11,20 @@ def get_index(firstIndex,string):
 
 def save_as_csv(data_df,pivot_df,csv,filename,filePath):
     if(csv):
+        try:
+            os.mkdir(f'{filePath}/csv/{filename}')
+        except FileExistsError:
+            pass
         data_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_1.csv',index=False)
         pivot_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_2.csv',index=True)
     else:
+        try:
+            os.mkdir(f'{filePath}/excel')
+        except FileExistsError:
+            pass
         with pd.ExcelWriter(f'{filePath}/excel/{filename}_CAR.xlsx') as writer:
-            data_df.to_excel(writer,sheet_name='Sheet1',index=False)
-            pivot_df.to_excel(writer,sheet_name='Sheet2',index=True)
+            data_df.to_excel(writer,sheet_name='All data',index=False)
+            pivot_df.to_excel(writer,sheet_name='Pivot data',index=True)
 
 def create_loan(text):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
@@ -166,9 +174,9 @@ for file in pdf_files:
     }
     total_dict = pd.DataFrame(total_dict,index=[0])
     data_df = pd.concat([data_df,total_dict],ignore_index=False)
-    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Balance','EMI','Paid Principle','Sanction/Credit Limit'], aggfunc=np.sum, fill_value=0)
+    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Sanction/Credit Limit','Balance','EMI','Paid Principle'], aggfunc=np.sum, fill_value=0)
     filename = os.path.basename(file).split('.')[0]
-    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False)
+    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False,filePath=folder_loc)
 
 # regex for month-date
 # month_date = re.compile(r'(\d{1,2})-(\d{1,2})')
