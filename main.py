@@ -73,10 +73,9 @@ def save_as_csv(data_df,pivot_df,csv,filename,info_df,rec_df,filePath):
             rec_df.to_excel(writer,sheet_name='Recommendation',index=False)
 
 def create_loan(text):
-    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
+    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[]}
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
-        delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
         openIndex = get_index(text.find('Open: '),'Open: ')
@@ -152,10 +151,6 @@ def create_loan(text):
                     sanction_credit = 0
         AccountIndex = get_index(text.find('Account Status: '),'Account Status: ')
         AccountStatus = text[AccountIndex:text.find('Asset Classification')].strip()
-        if(AccountStatus in [" ","Closed Account","Standard","Current Account"]):
-            delinquecy = False
-        else:
-            delinquecy = True
         completeDF['Balance'].append(int(Balance))
         completeDF['Loan Institution'].append(instiutionName.strip())
         completeDF['Products'].append(ProductsName.strip())
@@ -163,7 +158,6 @@ def create_loan(text):
         completeDF['EMI'].append(int(EMIValue))
         completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
-        completeDF['Delinquencies'].append(delinquecy)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
@@ -203,11 +197,6 @@ for file in pdf_files:
         FOIR = salary*0.6
     else:
         FOIR = salary*0.7
-    delinquency = data_df['Delinquencies'].sum()
-    if(delinquency>0):
-        delinquency = True
-    else:
-        delinquency = False
     disposable = FOIR - data_df['EMI'].sum()
     data_df.drop(['open'],axis=1,inplace=True)
     # create a total dictionary
@@ -238,7 +227,6 @@ for file in pdf_files:
 
     recommendation = ""
     recommendation_df = {"Recommendation":[],"New PL":[],"Top Up":[],"Reduce":[],"Remove":[]}
-    no_of_delinquecy = data_df['Delinquencies'].sum()
     if(disposable>0):
         new_pl = int(get_new_PL(disposable))
         recommendation_df["New PL"].append(new_pl)
