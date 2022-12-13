@@ -76,7 +76,6 @@ def create_loan(text):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
-        delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
         openIndex = get_index(text.find('Open: '),'Open: ')
@@ -150,12 +149,6 @@ def create_loan(text):
                     sanction_credit = int(sanctionLimit.replace(',',''))
                 except ValueError:
                     sanction_credit = 0
-        AccountIndex = get_index(text.find('Account Status: '),'Account Status: ')
-        AccountStatus = text[AccountIndex:text.find('Asset Classification')].strip()
-        if(AccountStatus in [" ","Closed Account","Standard","Current Account"]):
-            delinquecy = False
-        else:
-            delinquecy = True
         completeDF['Balance'].append(int(Balance))
         completeDF['Loan Institution'].append(instiutionName.strip())
         completeDF['Products'].append(ProductsName.strip())
@@ -163,7 +156,6 @@ def create_loan(text):
         completeDF['EMI'].append(int(EMIValue))
         completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
-        completeDF['Delinquencies'].append(delinquecy)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
@@ -203,11 +195,6 @@ for file in pdf_files:
         FOIR = salary*0.6
     else:
         FOIR = salary*0.7
-    delinquency = data_df['Delinquencies'].sum()
-    if(delinquency>0):
-        delinquency = True
-    else:
-        delinquency = False
     disposable = FOIR - data_df['EMI'].sum()
     data_df.drop(['open'],axis=1,inplace=True)
     # create a total dictionary
@@ -237,21 +224,20 @@ for file in pdf_files:
     new_df = new_df.drop(new_df[(new_df['date_diff'] < 12) & (new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan']))].index)
 
     recommendation = ""
-    recommendation_df = {"Recommendation":[],"New PL":[],"Top Up":[],"Reduce":[],"Remove":[]}
-    no_of_delinquecy = data_df['Delinquencies'].sum()
-    if(disposable>0):
-        new_pl = int(get_new_PL(disposable))
-        recommendation_df["New PL"].append(new_pl)
-        recommendation+=f"You are eligible for a new Personal Loan of ₹{new_pl}"
-    else:
-        recommendation+="You are not eligible for a new Personal Loan"
+    recommendation_df = {"Recommendation":[0],"New PL":[0],"Top Up":[0],"Reduce":[0],"Remove":[0]}
+#     if(disposable>0):
+#         new_pl = int(get_new_PL(disposable))
+#         recommendation_df["New PL"].append(new_pl)
+#         recommendation+=f"You are eligible for a new Personal Loan of ₹{new_pl}"
+#     else:
+#         recommendation+="You are not eligible for a new Personal Loan"
 
-    top_up_label = get_top_up(new_df)
-    if(len(top_up_label)>0 and top_up_label[1]>0):
-        recommendation_df["Top Up"].append(top_up_label)
-        recommendation+=f" and a Top Up of ₹{top_up_label[1]} on your {top_up_label[0]}"
-    else:
-        recommendation+=". There is no Top Up available"
+#     top_up_label = get_top_up(new_df)
+#     if(len(top_up_label)>0 and top_up_label[1]>0):
+#         recommendation_df["Top Up"].append(top_up_label)
+#         recommendation+=f" and a Top Up of ₹{top_up_label[1]} on your {top_up_label[0]}"
+#     else:
+#         recommendation+=". There is no Top Up available"
     filename = os.path.basename(file).split('.')[0]
     recommendation_df = pd.DataFrame(recommendation_df)
     info_df = pd.DataFrame(info_df)
