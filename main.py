@@ -73,7 +73,7 @@ def save_as_csv(data_df,pivot_df,csv,filename,info_df,rec_df,filePath):
             rec_df.to_excel(writer,sheet_name='Recommendation',index=False)
 
 def create_loan(text):
-    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
+    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[]}
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
         accountNoIndex = text.find("Acct # :")
@@ -186,7 +186,7 @@ for file in pdf_files:
     data_df = data_df.loc[data_df['open']==True]
     data_df.sort_values(by=['Products'],ascending=True,inplace=True)
     # drop row where balance is 0 and Delinquencies is true and emi is 0
-    data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']==True) | (data_df['EMI']!=0)]
+    #data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']==True) | (data_df['EMI']!=0)]
     # emi == 0
     data_df['Paid Principle'] = data_df['Paid Principle'].apply(lambda x: 0 if x<0 else x)
     if(salary <= 50000):
