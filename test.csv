@@ -1,0 +1,21 @@
+,Products,Loan Institution,date_opened,Sanction/Credit Limit,Balance,EMI,Paid Principle,Delinquencies,Foir,Disposable,salary,date_diff
+3,1_CreditCard,HDFC Bank Limited,2020-01-21,0,955,47,0,False,,,,35
+8,1_CreditCard,Axis Bank Ltd.,2022-02-22,66000,34894,1744,31106,False,,,,10
+9,1_CreditCard,Axis Bank Ltd.,2022-06-30,16000,12180,609,3820,True,,,,6
+17,1_CreditCard,IDFC First Bank Ltd,2022-05-30,25000,23988,1199,1012,False,,,,7
+1,3_PersonalLoan,"Vaibhav Vyapaar Private 
+Limite",2021-08-04,6000,6000,0,0,True,,,,16
+21,3_PersonalLoan,OHMY Loan Private Limited,2021-03-18,25000,3114,3211,21886,False,,,,21
+19,3_PersonalLoan,IDFC First Bank Ltd,2021-11-03,4295,1457,1484,2838,False,,,,13
+20,4_Others,"Kisetsu Saison Finance 
+(India) Pvt Lt",2021-09-03,30112021,11499,0,30100522,False,,,,15
+18,4_Others,DMI Finance Private Limited,2021-10-05,10648,3993,0,6655,False,,,,14
+0,4_Others,Bajaj Finance Limited,2022-09-06,17528,17528,0,0,True,,,,3
+12,4_Others,Manba Finance Ltd,2021-03-23,84301,53339,0,30962,False,,,,21
+22,4_Others,Kotak Mahindra Bank Ltd.,2021-04-16,0,7418,0,0,False,,,,20
+5,4_Others,Kotak Mahindra Bank Ltd.,2021-12-27,14198,3782,0,10416,False,,,,12
+4,4_Others,Kotak Mahindra Bank Ltd.,2022-01-09,12499,1467,0,11032,False,,,,11
+2,4_Others,Aditya Birla Finance,2021-10-12,15000,2792,1448,12208,False,,,,14
+23,4_Others,"InCred Financial Services 
+Limite",2018-08-18,1500,5,1527,1495,True,,,,52
+0,Total,,,30561990,313398,16339,30256965,,5.0,-16334.0,10.0,0

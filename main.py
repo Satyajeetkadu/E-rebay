@@ -1,7 +1,6 @@
 # importing required modules
 import PyPDF2
 import numpy as np
-import re
 import datetime
 import pandas as pd
 import os
@@ -23,24 +22,36 @@ def get_new_PL(disposable):
     principal_amt = value1/value2
     return principal_amt
 
-def get_top_up(df:pd.DataFrame):
+def get_top_up(df:pd.DataFrame,pivot_df:pd.DataFrame):
+    df.sort_values(by=['Paid Principle'],ascending=False,inplace = True)
+    top_up_df = df.loc[df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
+    df.drop(top_up_df.index,inplace=True)
+    top_up_df = top_up_df.drop_duplicates(subset=['Loan Institution'],keep='first')
+    df = pd.concat([df,top_up_df])
+    # create pivot table
+
     top_up_label = list()
     try:
-        top_up = df.loc["3_PersonalLoan"]["Paid Principle"]
+        top_up = pivot_df.loc["3_PersonalLoan"]["Paid Principle"]
         top_up_label = ["Personal Loan",top_up]
     except KeyError:
         pass
     try:
-        top_up = df.loc["5_AutoLoan"]["Paid Principle"]
+        top_up = pivot_df.loc["5_AutoLoan"]["Paid Principle"]
         top_up_label = ["Auto Loan",top_up]
     except KeyError:
         pass
     try:
-        top_up = df.loc["6_HomeLoan"]["Paid Principle"]
+        top_up = pivot_df.loc["6_HomeLoan"]["Paid Principle"]
         top_up_label = ["Home Loan",top_up] 
     except KeyError:
         pass
     return top_up_label
+
+def check_up(df: pd.DataFrame, pivot_df: pd.DataFrame):
+    work_df = df.loc[~df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
+    # Find index of personal loan in pivot_df
+    
 
 
 def diff_month(d1, d2):
@@ -73,9 +84,10 @@ def save_as_csv(data_df,pivot_df,csv,filename,info_df,rec_df,filePath):
             rec_df.to_excel(writer,sheet_name='Recommendation',index=False)
 
 def create_loan(text):
-    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[]}
+    completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
+        delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
         openIndex = get_index(text.find('Open: '),'Open: ')
@@ -151,6 +163,10 @@ def create_loan(text):
                     sanction_credit = 0
         AccountIndex = get_index(text.find('Account Status: '),'Account Status: ')
         AccountStatus = text[AccountIndex:text.find('Asset Classification')].strip()
+        if(AccountStatus in [" ","Closed Account","Standard","Current Account"]):
+            delinquecy = False
+        else:
+            delinquecy = True
         completeDF['Balance'].append(int(Balance))
         completeDF['Loan Institution'].append(instiutionName.strip())
         completeDF['Products'].append(ProductsName.strip())
@@ -158,6 +174,7 @@ def create_loan(text):
         completeDF['EMI'].append(int(EMIValue))
         completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
+        completeDF['Delinquencies'].append(delinquecy)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
@@ -167,8 +184,6 @@ files = os.listdir(folder_loc)
 # Create a list of all files with .pdf extension
 pdf_files = [f for f in files if f.endswith('.pdf')]
 for file in pdf_files:
-    print("For name",file)
-    salary = int(input("enter salary:"))
     pdfFileObj = open(folder_loc+"/"+file, 'rb')
     complete_String = ""
     pdfReader = PyPDF2.PdfFileReader(pdfFileObj)
@@ -179,6 +194,7 @@ for file in pdf_files:
     riskValue = int(complete_String[riskIndex:(complete_String.find("1. "))].strip())
     nameIndex = get_index(complete_String.find("Consumer Name: "),"Consumer Name: ")
     nameValue = complete_String[nameIndex:(complete_String.find("Personal Information"))].strip().capitalize()
+    salary = int(input(f"Enter salary for {nameValue}:"))
     finalDF = create_loan(complete_String)
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
@@ -197,6 +213,11 @@ for file in pdf_files:
         FOIR = salary*0.6
     else:
         FOIR = salary*0.7
+    delinquency = data_df['Delinquencies'].sum()
+    if(delinquency>0):
+        delinquency = True
+    else:
+        delinquency = False
     disposable = FOIR - data_df['EMI'].sum()
     data_df.drop(['open'],axis=1,inplace=True)
     # create a total dictionary
@@ -212,7 +233,7 @@ for file in pdf_files:
     }
     total_dict = pd.DataFrame(total_dict,index=[0])
     data_df = pd.concat([data_df,total_dict],ignore_index=False)
-    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Sanction/Credit Limit','Balance','EMI','Paid Principle'], aggfunc=np.sum, fill_value=0)
+    pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Sanction/Credit Limit','Balance','EMI','Paid Principle','Delinquencies'], aggfunc=np.sum, fill_value=0)
     pivot_df['FOIR'] = FOIR
     pivot_df['Disposable'] = disposable
     info_df = {
@@ -223,27 +244,35 @@ for file in pdf_files:
     # RECOMMENDATIONS
     new_df = data_df.copy()
     new_df['date_diff'] = new_df.apply(lambda x: diff_month(datetime.date.today(), x['date_opened']), axis=1)
+    # emi must be greater than 12 months
     new_df = new_df.drop(new_df[(new_df['date_diff'] < 12) & (new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan']))].index)
+    new_df.sort_values(by=['Paid Principle'],ascending=False,inplace = True)
+    top_up_df = new_df.loc[new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
+    new_df.drop(top_up_df.index,inplace=True)
+    top_up_df = top_up_df.drop_duplicates(subset=['Loan Institution'],keep='first')
+    new_df = pd.concat([new_df,top_up_df])
 
     recommendation = ""
-    recommendation_df = {"Recommendation":[],"New PL":[],"Top Up":[],"Reduce":[],"Remove":[]}
+    recommendation_df = {"Recommendation":[0],"New PL":[0],"Top Up":[0],"Reduce":[0],"Remove":[0]}
+    no_of_delinquecy = data_df['Delinquencies'].sum()
     if(disposable>0):
         new_pl = int(get_new_PL(disposable))
-        recommendation_df["New PL"].append(new_pl)
+        # recommendation_df["New PL"].append(new_pl)
         recommendation+=f"You are eligible for a new Personal Loan of ₹{new_pl}"
     else:
         recommendation+="You are not eligible for a new Personal Loan"
 
-    top_up_label = get_top_up(new_df)
-    if(len(top_up_label)>0 and top_up_label[1]>0):
-        recommendation_df["Top Up"].append(top_up_label)
-        recommendation+=f" and a Top Up of ₹{top_up_label[1]} on your {top_up_label[0]}"
-    else:
-        recommendation+=". There is no Top Up available"
-    filename = os.path.basename(file).split('.')[0]
-    recommendation_df = pd.DataFrame(recommendation_df)
+    # top_up_label = get_top_up(new_df,pd.pivot_table(new_df,values=['Paid Principle',"Balance"],index=['Products'],aggfunc=np.sum,fill_value=0))
+    # top_up = top_up_label[1]
+    # if(len(top_up_label)>0 and top_up_label[1]>0):
+    #     recommendation_df["Top Up"].append(top_up_label)
+        # recommendation+=f" and a Top Up of ₹{top_up_label[1]} on your {top_up_label[0]}"
+    # else:
+    #     top_up_label = 0
+    #     recommendation+=". There is no Top Up available"
+    # recommendation_df["Recommendation"].append(recommendation)
     info_df = pd.DataFrame(info_df)
-    save_as_csv(pivot_df= pivot_df,filename=filename,data_df=data_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=pd.DataFrame(recommendation_df),filePath=folder_loc)
+    save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=data_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=pd.DataFrame(recommendation_df),filePath=folder_loc)
 
 # regex for month-date
 # month_date = re.compile(r'(\d{1,2})-(\d{1,2})')
