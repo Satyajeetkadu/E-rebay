@@ -3,10 +3,15 @@ import PyPDF2
 import numpy as np
 import datetime
 import pandas as pd
+import re
 import os
 
 def get_index(firstIndex,string):
     return int(firstIndex)+int(len(string))
+
+def check_delinquencies(text):
+    pass
+
 
 def get_new_PL(disposable):
     # EMI = P x R x (1+R)^N / [(1+R)^N-1] (where n = 60 months, r = 15% per annum and EMI = disposable)
@@ -165,6 +170,24 @@ def create_loan(text):
         delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
+
+        # DELINQUENCIES
+
+        delinquenciesIndex = get_index(text.find("Suit Filed Status:"),"Suit Filed Status:")
+        if(text[delinquenciesIndex+1].strip() == "H"):
+            delinquencyString = text[(delinquenciesIndex+len("HistoryAccount Status:Asset Classification:Suit Filed Status:")+4):(text.find("Acct # :"))]
+            # print(delinquencyString)
+            # Get all index of string "-22" is present in the delinquency string
+            index = [m.start() for m in re.finditer('-22', delinquencyString)]
+            if(len(index)>0):
+                try:
+                    six_months = index[0:7]
+                except IndexError:
+                    six_months = index
+                delinquencyString = delinquencyString[six_months[0]:(six_months[-1]+2)]
+                delinquenciesCount = (delinquencyString.count("+")+delinquencyString.count("CLSD")+delinquencyString.count("WOF")+delinquencyString.count("RCV"))
+            else:
+                delinquenciesCount = 0
         openIndex = get_index(text.find('Open: '),'Open: ')
         openValue = text[openIndex:(text.find("Date Reported: "))].strip()
 
@@ -253,7 +276,7 @@ def create_loan(text):
         completeDF['EMI'].append(int(EMIValue))
         completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
-        completeDF['Delinquencies'].append(delinquecy)
+        completeDF['Delinquencies'].append(delinquenciesCount)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
