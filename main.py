@@ -22,36 +22,100 @@ def get_new_PL(disposable):
     principal_amt = value1/value2
     return principal_amt
 
-def get_top_up(df:pd.DataFrame,pivot_df:pd.DataFrame):
-    df.sort_values(by=['Paid Principle'],ascending=False,inplace = True)
-    top_up_df = df.loc[df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
-    df.drop(top_up_df.index,inplace=True)
+def getCases(top_up:int,case_df:dict,pivot:pd.DataFrame):
+    global recommendation_string
+    tentative_string = ""
+    balance = pivot['Balance'].to_list()
+    if (len(balance)>0):
+        for i in range(len(balance)):
+            productBalance = balance[i]
+            if(top_up == 0):
+                break
+            elif(productBalance>top_up):
+                # REDUCE CONDITION WILL HAVE {REDUCE PRODUCT: OUTSTANDING PRODUCT VALUE}
+                case_df['Sentence'].append(f"Reduce {pivot.index[i]}")
+                tentative_string+=f", Reduce {pivot.index[i]}"
+                outstandingProductBalance = productBalance - top_up
+                top_up = 0
+                case_df["Value"].append(outstandingProductBalance)
+            elif(productBalance<top_up):
+                # REMOVE CONDITION WILL HAVE {REMOVE PRODUCT: TOP UP VALUE}
+                case_df['Sentence'].append(f"Remove {pivot.index[i]}")
+                tentative_string+=f", Remove {pivot.index[i]}"
+                top_up = top_up - productBalance
+                productBalance = 0
+                case_df['Value'].append(top_up)
+            else:
+                print("No recommendation")
+        recommendation_string+=" We recommend you use this to "+tentative_string
+    else:
+        recommendation_string+=""
+    return case_df
+
+
+def get_top_up(new_df:pd.DataFrame,new_pl:int):
+    global recommendation_string
+    new_df['date_diff'] = new_df.apply(lambda x: diff_month(datetime.date.today(), x['date_opened']), axis=1)
+    # emi must be greater than 12 months
+    new_df = new_df.drop(new_df[(new_df['date_diff'] < 12) & (new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HousingLoan']))].index)
+    new_df.sort_values(by=['Paid Principle'],ascending=False,inplace = True)
+    top_up_df = new_df.loc[new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HousingLoan'])]
+    new_df.drop(top_up_df.index,inplace=True)
     top_up_df = top_up_df.drop_duplicates(subset=['Loan Institution'],keep='first')
-    df = pd.concat([df,top_up_df])
-    # create pivot table
-
-    top_up_label = list()
+    new_df = pd.concat([new_df,top_up_df])
+    pivot = pd.pivot_table(top_up_df,values=['Paid Principle',"Balance"],index=['Products'],aggfunc=np.sum,fill_value=0)
+    top_up_list = []
     try:
-        top_up = pivot_df.loc["3_PersonalLoan"]["Paid Principle"]
-        top_up_label = ["Personal Loan",top_up]
-    except KeyError:
+        top_up_list.append(np.where(pivot.index == '3_PersonalLoan')[0][0])
+    except IndexError:
         pass
     try:
-        top_up = pivot_df.loc["5_AutoLoan"]["Paid Principle"]
-        top_up_label = ["Auto Loan",top_up]
-    except KeyError:
+        top_up_list.append(np.where(pivot.index == '5_AutoLoan')[0][0])
+    except IndexError:
         pass
     try:
-        top_up = pivot_df.loc["6_HomeLoan"]["Paid Principle"]
-        top_up_label = ["Home Loan",top_up] 
-    except KeyError:
+        top_up_list.append(np.where(pivot.index == '6_HousingLoan')[0][0])
+    except IndexError:
         pass
-    return top_up_label
-
-def check_up(df: pd.DataFrame, pivot_df: pd.DataFrame):
-    work_df = df.loc[~df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
-    # Find index of personal loan in pivot_df
-    
+    pivot = pivot.reset_index()
+    pivot['Products'] = pivot['Products'].map({
+        '1_CreditCard':'Credit Card',
+        '2_BusinessLoan':'Business Loan',
+        '3_PersonalLoan':'Personal Loan',
+        '4_Others':'Others',
+        '5_AutoLoan':'Auto Loan',
+        '6_HousingLoan':'House Loan',
+    })
+    pivot = pivot.dropna(subset=['Products'],axis=0)
+    pivot = pivot.set_index('Products')
+    case_df = {"Sentence":[],"Value":[]}
+    products = list(set([pivot.index[x] for x in top_up_list]))
+    # print(top_up_list)
+    if(len(top_up_list) > 0):
+        if(len(products)):
+            recommendation_string+="You can get a top up on "+', '.join(products)+" based on the amount you have already paid for. "
+        else:
+            recommendation_string+="No top up available."
+        for i in range(len(top_up_list)):
+            # case_df.append({"Sentence":[f"Top up {pivot.index[top_up_index]}"],"Value":[pivot.loc[pivot.index[top_up_index]]['Paid Principle']]})
+            top_up_index = top_up_list[i]
+            case_df['Sentence'].append(f"Top up {pivot.index[top_up_index]}")
+            case_df['Value'].append(pivot.loc[pivot.index[top_up_index]]['Paid Principle'])
+            top_up = pivot.loc[pivot.index[top_up_index]]['Paid Principle']
+            if(i==0):
+                local_pivot = pivot.loc[pivot.index[0:top_up_list[i]]]
+            else:
+                local_pivot = pivot.loc[pivot.index[top_up_list[i-1]:top_up_list[i]]]
+            case_df = getCases(top_up=top_up,case_df =case_df,pivot =local_pivot)
+    else:
+        recommendation_string+=""
+    if(new_pl>0):
+        case_df['Sentence'].append("New Personal Loan")
+        case_df['Value'].append(new_pl)
+    else:
+        pass
+    # print(case_df,products,top_up_list,recommendation_string)
+    return pd.DataFrame(case_df)
 
 
 def diff_month(d1, d2):
@@ -60,18 +124,19 @@ def diff_month(d1, d2):
     except AttributeError:
         return 0
 
-def save_as_csv(data_df,pivot_df,csv,filename,info_df,rec_df,filePath):
+def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:pd.DataFrame,rec_df:pd.DataFrame,case_df:pd.DataFrame,filePath):
     # remove date_opened,foir,disposable,salary
     data_df = data_df.drop(columns=['date_opened','Foir','Disposable','salary'])
     if(csv):
         try:
-            os.mkdir(f'{filePath}/csv/{filename}')
+            print("Hello")
+            os.mkdir(f'{filePath}/csv')
         except FileExistsError:
             pass
-        data_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_1.csv',index=False)
-        pivot_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_2.csv',index=True)
-        info_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_3.csv',index=False)
-        rec_df.to_csv(f'{filePath}/csv/{filename}/{filename}_CAR_4.csv',index=False)
+        data_df.to_csv(f'{filePath}/csv/{filename}_CAR_1.csv',index=False)
+        pivot_df.to_csv(f'{filePath}/csv/{filename}_CAR_2.csv',index=True)
+        info_df.to_csv(f'{filePath}/csv/{filename}_CAR_3.csv',index=False)
+        rec_df.to_csv(f'{filePath}/csv/{filename}_CAR_4.csv',index=False)
     else:
         try:
             os.mkdir(f'{filePath}/excel')
@@ -82,6 +147,16 @@ def save_as_csv(data_df,pivot_df,csv,filename,info_df,rec_df,filePath):
             pivot_df.to_excel(writer,sheet_name='Pivot data',index=True)
             info_df.to_excel(writer,sheet_name='Info',index=False)
             rec_df.to_excel(writer,sheet_name='Recommendation',index=False)
+            print(case_df.shape)
+            if len(case_df) > 3:
+                print("Hello")
+                case_1 = case_df.iloc[:3]
+                case_2 = case_df.iloc[3:]
+                case_1.to_excel(writer,sheet_name='Case 1',index=False)
+                case_2.to_excel(writer,sheet_name='Case 2',index=False)
+            else:
+                print("Hello 2")
+                case_df.to_excel(writer,sheet_name='Case 1',index=False)
 
 def create_loan(text):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
@@ -121,14 +196,18 @@ def create_loan(text):
         ProductsIndex = get_index(text.find('Type: '),'Type: ')
         ProductsName = text[ProductsIndex:(text.find('Last Payment:'))-1]
 
-        if(ProductsName not in ["Personal Loan","Business Loan","Credit Card","Home Loan","Auto Loan"]):
+        if(ProductsName not in ["Personal Loan","Business Loan","Credit Card","Housing Loan","Auto Loan"]):
             ProductsName = "4_Others"
         elif(ProductsName == "Credit Card"):
             ProductsName = "1_CreditCard"
-        elif(ProductsName == "Personal Loan"):
-            ProductsName = "3_PersonalLoan"
         elif(ProductsName == "Business Loan"):
             ProductsName = "2_BusinessLoan"
+        elif(ProductsName == "Personal Loan"):
+            ProductsName = "3_PersonalLoan"
+        elif(ProductsName == "Auto Loan"):
+            ProductsName = "5_AutoLoan"
+        elif(ProductsName == "Housing Loan"):
+            ProductsName = "6_HousingLoan"
         # Find EMI
         EMIIndex = get_index(text.find('Monthly Payment Amount: '),'Monthly Payment Amount:')
         EMIValue = text[EMIIndex:(text.find('Credit Limit:'))-1]
@@ -178,7 +257,8 @@ def create_loan(text):
         completeDF['date_opened'].append(date_object)
     return completeDF
 
-folder_loc = input("Enter folder location:")
+# folder_loc = input("Enter folder location:")
+folder_loc = "/Users/nilaygaitonde/Downloads"
 # Create a list of all files in the folder
 files = os.listdir(folder_loc)
 # Create a list of all files with .pdf extension
@@ -194,7 +274,8 @@ for file in pdf_files:
     riskValue = int(complete_String[riskIndex:(complete_String.find("1. "))].strip())
     nameIndex = get_index(complete_String.find("Consumer Name: "),"Consumer Name: ")
     nameValue = complete_String[nameIndex:(complete_String.find("Personal Information"))].strip().capitalize()
-    salary = int(input(f"Enter salary for {nameValue}:"))
+    # salary = int(input(f"Enter salary for {nameValue}:"))
+    salary = 150000
     finalDF = create_loan(complete_String)
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
@@ -243,36 +324,17 @@ for file in pdf_files:
     }
     # RECOMMENDATIONS
     new_df = data_df.copy()
-    new_df['date_diff'] = new_df.apply(lambda x: diff_month(datetime.date.today(), x['date_opened']), axis=1)
-    # emi must be greater than 12 months
-    new_df = new_df.drop(new_df[(new_df['date_diff'] < 12) & (new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan']))].index)
-    new_df.sort_values(by=['Paid Principle'],ascending=False,inplace = True)
-    top_up_df = new_df.loc[new_df['Products'].isin(['3_PersonalLoan','5_AutoLoan','6_HouseLoan'])]
-    new_df.drop(top_up_df.index,inplace=True)
-    top_up_df = top_up_df.drop_duplicates(subset=['Loan Institution'],keep='first')
-    new_df = pd.concat([new_df,top_up_df])
-
-    recommendation = ""
-    recommendation_df = {"Recommendation":[0],"New PL":[0],"Top Up":[0],"Reduce":[0],"Remove":[0]}
-    no_of_delinquecy = data_df['Delinquencies'].sum()
+    recommendation_string = ""
+    new_pl=0
     if(disposable>0):
         new_pl = int(get_new_PL(disposable))
-        # recommendation_df["New PL"].append(new_pl)
-        recommendation+=f"You are eligible for a new Personal Loan of ₹{new_pl}"
+        recommendation_string+=f"You are eligible for a new Personal Loan of ₹{new_pl}. "
     else:
-        recommendation+="You are not eligible for a new Personal Loan"
-
-    # top_up_label = get_top_up(new_df,pd.pivot_table(new_df,values=['Paid Principle',"Balance"],index=['Products'],aggfunc=np.sum,fill_value=0))
-    # top_up = top_up_label[1]
-    # if(len(top_up_label)>0 and top_up_label[1]>0):
-    #     recommendation_df["Top Up"].append(top_up_label)
-        # recommendation+=f" and a Top Up of ₹{top_up_label[1]} on your {top_up_label[0]}"
-    # else:
-    #     top_up_label = 0
-    #     recommendation+=". There is no Top Up available"
-    # recommendation_df["Recommendation"].append(recommendation)
+        recommendation_string+="You are not eligible for a new Personal Loan. "
     info_df = pd.DataFrame(info_df)
-    save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=data_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=pd.DataFrame(recommendation_df),filePath=folder_loc)
+    case_df = get_top_up(new_df=new_df,new_pl=new_pl)
+    recommendation = {"Conclusion":[recommendation_string]}
+    save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=data_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=pd.DataFrame(recommendation),case_df = case_df,filePath=folder_loc)
 
 # regex for month-date
 # month_date = re.compile(r'(\d{1,2})-(\d{1,2})')
