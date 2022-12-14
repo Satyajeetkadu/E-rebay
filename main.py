@@ -3,10 +3,15 @@ import PyPDF2
 import numpy as np
 import datetime
 import pandas as pd
+import re
 import os
 
 def get_index(firstIndex,string):
     return int(firstIndex)+int(len(string))
+
+def check_delinquencies(text):
+    pass
+
 
 def get_new_PL(disposable):
     # EMI = P x R x (1+R)^N / [(1+R)^N-1] (where n = 60 months, r = 15% per annum and EMI = disposable)
@@ -165,6 +170,9 @@ def create_loan(text):
         delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
+        # print(accountNoIndex)
+        # delinquencies
+        # delinquecy_count =check_delinquencies(text)
         openIndex = get_index(text.find('Open: '),'Open: ')
         openValue = text[openIndex:(text.find("Date Reported: "))].strip()
 
@@ -253,7 +261,7 @@ def create_loan(text):
         completeDF['EMI'].append(int(EMIValue))
         completeDF['Paid Principle'].append(int(sanction_credit-Balance))
         completeDF['open'].append(openValue)
-        completeDF['Delinquencies'].append(delinquecy)
+        completeDF['Delinquencies'].append(0)
         completeDF['date_opened'].append(date_object)
     return completeDF
 
