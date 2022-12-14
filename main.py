@@ -322,6 +322,7 @@ for file in pdf_files:
         "Credit Score":[riskValue],
         "Salary":[salary],
     }
+    pivot_df = pivot_df[['Sanction/Credit Limit','Balance','EMI','Paid Principle','FOIR','Disposable']]
     # RECOMMENDATIONS
     new_df = data_df.copy()
     recommendation_string = ""
