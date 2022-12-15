@@ -29,7 +29,7 @@ def recommend_delinquency(pivot_df:pd.DataFrame):
     pivot_df = rename_products(pivot_df)
     products = list(set([pivot_df.index[x] for x in delinquency_index]))
     products = [x for x in products if x == x]
-    recommendation_string="Your Credit report shows that you have delinquencies in "+', '.join(products)+","+" due to which you are not eligible for a Loan. We suggest you to Clear your Delinquencies in"+', '.join(products)+","+" so your chances of Loan approval gets Improved as well as it will also help you to maintain Good Credit Score."
+    recommendation_string="Your Credit report shows that you have delinquencies in "+', '.join(products)+","+" due to which you are not eligible for a Loan. We suggest you to Clear your Delinquencies in "+', '.join(products)+","+" so your chances of Loan approval gets Improved as well as it will also help you to maintain Good Credit Score."
 
 def get_new_PL(disposable:int):
     # EMI = P x R x (1+R)^N / [(1+R)^N-1] (where n = 60 months, r = 15% per annum and EMI = disposable)
@@ -415,19 +415,24 @@ for file in pdf_files:
     # RECOMMENDATIONS
     new_df = data_df.copy()
     recommendation_string = ""
-    new_pl=0
-    if(disposable>0):
-        new_pl = int(get_new_PL(disposable))
+    if(info_df['Credit Score']>650):
+        new_pl=0
+        if(disposable>0):
+            new_pl = int(get_new_PL(disposable))
+        else:
+            recommendation_string+="You are not eligible for a new Personal Loan. "
+        info_df = pd.DataFrame(info_df)
+        if(delinquency > 0):
+            recommend_delinquency(pivot_df)
+            case_df = pd.DataFrame({"Conclusion":[recommendation_string]})
+            rec_df = pd.DataFrame()
+        else:
+            case_df = get_top_up(new_df=new_df,new_pl=new_pl)
+            case_df = pd.DataFrame(case_df)
+            rec_df = pd.DataFrame({"Conclusion":[recommendation_string]})
     else:
-        recommendation_string+="You are not eligible for a new Personal Loan. "
-    info_df = pd.DataFrame(info_df)
-    if(delinquency > 0):
-        recommend_delinquency(pivot_df)
+        recommendation_string+="Your credit score is low."
         case_df = pd.DataFrame({"Conclusion":[recommendation_string]})
         rec_df = pd.DataFrame()
-    else:
-        case_df = get_top_up(new_df=new_df,new_pl=new_pl)
-        case_df = pd.DataFrame(case_df)
-        rec_df = pd.DataFrame({"Conclusion":[recommendation_string]})
 
     save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=show_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=rec_df,case_df = case_df,filePath=folder_loc)
