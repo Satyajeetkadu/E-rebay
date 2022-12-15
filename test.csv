@@ -1,0 +1,9 @@
+Products,Loan Institution,Sanction/Credit Limit,Balance,EMI,Paid Principle,Delinquencies
+3_PersonalLoan,State Bank Of India,961000,962718,19317,0,True
+3_PersonalLoan,State Bank Of India,1,-813858,0,813859,False
+4_Others,Punjab National Bank,800000,805163,0,0,False
+4_Others,Punjab National Bank,80,80,0,0,False
+4_Others,Punjab National Bank,1000000,1039824,9525,0,True
+4_Others,Uttar Bihar Gramin Bank,300000,319508,0,0,False
+4_Others,Central Bank of India,45000,15145,1058,29855,True
+Total,,3106081,2328580,29900,843714,
