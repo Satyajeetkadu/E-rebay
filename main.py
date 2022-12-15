@@ -209,7 +209,7 @@ def diff_month(d1, d2):
     except AttributeError:
         return 0
 
-def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:pd.DataFrame,rec_df:pd.DataFrame,case_df:pd.DataFrame,filePath):
+def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:pd.DataFrame,rec_df:pd.DataFrame,case_df:pd.DataFrame,filePath:str,disposable:int):
     # remove date_opened,foir,disposable,salary
     data_df = data_df.drop(columns=['date_opened','Foir','Disposable','salary'])
     pivot_df = rename_products(pivot_df)
@@ -232,39 +232,50 @@ def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:
             pivot_df.to_excel(writer,sheet_name='Pivot data',index=True)
             info_df.to_excel(writer,sheet_name='Info',index=False)
             rec_df.to_excel(writer,sheet_name='Recommendation',index=False)
-            if len(case_df) > 3:
-                case_1 = case_df.iloc[:3]
-                case_2 = case_df.iloc[3:]
-                case_1.to_excel(writer,sheet_name='Case 1',index=False)
-                case_2.to_excel(writer,sheet_name='Case 2',index=False)
+            if(disposable>0):
+                if len(case_df) > 3:
+                    case_1 = case_df.iloc[:3]
+                    case_2 = case_df.iloc[3:]
+                    case_1.to_excel(writer,sheet_name='Case 1',index=False)
+                    case_2.to_excel(writer,sheet_name='Case 2',index=False)
+                else:
+                    case_df.to_excel(writer,sheet_name='Case 1',index=False)
             else:
-                case_df.to_excel(writer,sheet_name='Case 1',index=False)
+                pass
 
 def create_loan(text:str):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
+    delinquenciesCount = 0
+    six_months = []
+    month_year_regex = re.compile(r"\d{2}-\d{2}")
+    today_date = datetime.date.today()
     countAcc = text.count("Acct # :")
     for i in range(countAcc):
-        delinquecy = False
         accountNoIndex = text.find("Acct # :")
         text = text[accountNoIndex+1:]
-
         # DELINQUENCIES
-
         delinquenciesIndex = get_index(text.find("Suit Filed Status:"),"Suit Filed Status:")
         if(text[delinquenciesIndex+1].strip() == "H"):
             delinquencyString = text[(delinquenciesIndex+len("HistoryAccount Status:Asset Classification:Suit Filed Status:")+4):(text.find("Acct # :"))]
             # print(delinquencyString)
             # Get all index of string "-22" is present in the delinquency string
-            index = [m.start() for m in re.finditer('-22', delinquencyString)]
+            index = [m.start() for m in re.finditer(month_year_regex,delinquencyString)]
             if(len(index)>0):
-                try:
-                    six_months = index[0:7]
-                except IndexError:
-                    six_months = index
-                delinquencyString = delinquencyString[six_months[0]:(six_months[-1]+2)]
-                delinquenciesCount = (delinquencyString.count("+")+delinquencyString.count("CLSD")+delinquencyString.count("WOF")+delinquencyString.count("RCV"))
-            else:
-                delinquenciesCount = 0
+                for indice in index:
+                    month_string = delinquencyString[indice:indice+5]
+                    try:
+                        input_month = datetime.datetime.strptime(month_string, "%m-%y")
+                    except ValueError:
+                        pass
+                    if(diff_month(today_date,input_month)<=7):
+                        print(input_month)
+                        six_months.append(indice)
+                    else:
+                        pass
+                if(len(six_months)>0):
+                    delinquencyString = delinquencyString[six_months[0]:(six_months[-1]+2)]
+                    delinquenciesCount = (delinquencyString.count("+")+delinquencyString.count("CLSD")+delinquencyString.count("WOF")+delinquencyString.count("RCV"))
+            
         openIndex = get_index(text.find('Open: '),'Open: ')
         openValue = text[openIndex:(text.find("Date Reported: "))].strip()
 
@@ -290,11 +301,12 @@ def create_loan(text:str):
             Balance = 0
         # Find Loan Institution
         instiutionIndex = get_index(text.find('Institution : '),'Institution : ')
-        instiutionName = text[instiutionIndex:(text.find('Past Due Amount'))-1]
+        instiutionName = text[instiutionIndex:(text.find('Past Due Amount'))].strip()
 
+        print(instiutionName,delinquenciesCount)
         # Find Products of loan
         ProductsIndex = get_index(text.find('Type: '),'Type: ')
-        ProductsName = text[ProductsIndex:(text.find('Last Payment:'))-1]
+        ProductsName = text[ProductsIndex:(text.find('Last Payment:'))].strip()
         
         # Find EMI
         EMIIndex = get_index(text.find('Monthly Payment Amount: '),'Monthly Payment Amount:')
@@ -366,9 +378,10 @@ for file in pdf_files:
         'Yes': True,
         'No': False
     })
-    data_df = data_df.loc[data_df['open']==True]
+    data_df = data_df.loc[data_df['open']>0]
     # drop row where balance is 0 and Delinquencies is true and emi is 0
-    data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']==True) | (data_df['EMI']!=0)]
+    data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']>0)]
+    print(data_df)
     # emi == 0
     data_df['Paid Principle'] = data_df['Paid Principle'].apply(lambda x: 0 if x<0 else x)
     if(salary <= 50000):
@@ -398,8 +411,8 @@ for file in pdf_files:
         'Paid Principle': data_df['Paid Principle'].sum(),
         'Sanction/Credit Limit': data_df['Sanction/Credit Limit'].sum(),
         'Delinquencies': delinquency,
-        'Foir': FOIR,
-        'Disposable': disposable,
+        'Foir': int(FOIR),
+        'Disposable': int(disposable),
         "salary": salary
     }
     total_dict = pd.DataFrame(total_dict,index=[0])
@@ -437,4 +450,4 @@ for file in pdf_files:
         case_df = pd.DataFrame({"Conclusion":[recommendation_string]})
         rec_df = pd.DataFrame()
 
-    save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=show_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=rec_df,case_df = case_df,filePath=folder_loc)
+    save_as_csv(pivot_df= pivot_df,filename=nameValue,data_df=show_df,csv=False,info_df=pd.DataFrame(info_df),rec_df=rec_df,case_df = case_df,filePath=folder_loc,disposable = disposable)
