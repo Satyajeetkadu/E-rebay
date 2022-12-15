@@ -15,6 +15,7 @@ def rename_products(df:pd.DataFrame):
         '4_Others':'Others',
         '5_AutoLoan':'Auto Loan',
         '6_HousingLoan':'House Loan',
+        'Total':'Total'
     })
     df = df.set_index('Products')
     return df
@@ -28,6 +29,7 @@ def recommend_delinquency(pivot_df:pd.DataFrame):
     delinquency_index = np.where(pivot_df['Delinquencies']>0)[0]
     pivot_df = rename_products(pivot_df)
     products = list(set([pivot_df.index[x] for x in delinquency_index]))
+    products.remove('Total')
     products = [x for x in products if x == x]
     recommendation_string="Your Credit report shows that you have delinquencies in "+', '.join(products)+","+" due to which you are not eligible for a Loan. We suggest you to Clear your Delinquencies in "+', '.join(products)+","+" so your chances of Loan approval gets Improved as well as it will also help you to maintain Good Credit Score."
 
@@ -81,11 +83,14 @@ def get_newpl_cases(case_df, pivot, new_pl, balance):
     global recommendation_string
     tentative_string =[]
     if(balance == 0):
-        balance = pivot['Balance'].to_list()
+        try:
+            balance = pivot['Balance'].to_list()
+        except KeyError:
+            balance = 0
+            return case_df
     else:
         pass
     balance = [i for i in balance if i != 0]
-    print(balance)
     if(len(balance) > 0):
         for i in range(len(balance)):
             productBalance = balance[i]
@@ -162,7 +167,6 @@ def get_top_up(new_df:pd.DataFrame,new_pl:int):
     products = [x for x in products if x == x]
     top_up_list.reverse()
     if(len(top_up_list) > 0):
-        print("Hello world")
         if(len(products)>0):
             recommendation_string+="You can get a top up on "+', '.join(products)+" based on the amount you have already paid for. "
         else:
@@ -174,6 +178,7 @@ def get_top_up(new_df:pd.DataFrame,new_pl:int):
             case_df['Value'].append(pivot.loc[pivot.index[top_up_index]]['Paid Principle'])
             top_up = pivot.loc[pivot.index[top_up_index]]['Paid Principle']
             if(i==0):
+                # remove all indexes in top_up_list from pivot
                 local_pivot = pivot.loc[pivot.index[0:top_up_list[i]]]
             else:
                 local_pivot = pivot.loc[pivot.index[top_up_list[i-1]:top_up_list[i]]]
@@ -206,7 +211,7 @@ def diff_month(d1, d2):
 
 def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:pd.DataFrame,rec_df:pd.DataFrame,case_df:pd.DataFrame,filePath):
     # remove date_opened,foir,disposable,salary
-    # data_df = data_df.drop(columns=['date_opened','Foir','Disposable','salary'])
+    data_df = data_df.drop(columns=['date_opened','Foir','Disposable','salary'])
     pivot_df = rename_products(pivot_df)
     if(csv):
         try:
@@ -325,10 +330,6 @@ def create_loan(text:str):
                     sanction_credit = 0
         AccountIndex = get_index(text.find('Account Status: '),'Account Status: ')
         AccountStatus = text[AccountIndex:text.find('Asset Classification')].strip()
-        if(AccountStatus in [" ","Closed Account","Standard","Current Account"]):
-            delinquecy = False
-        else:
-            delinquecy = True
         completeDF['Balance'].append(int(Balance))
         completeDF['Loan Institution'].append(instiutionName.strip())
         completeDF['Products'].append(ProductsName.strip())
@@ -358,7 +359,7 @@ for file in pdf_files:
     nameIndex = get_index(complete_String.find("Consumer Name: "),"Consumer Name: ")
     nameValue = complete_String[nameIndex:(complete_String.find("Personal Information"))].strip().capitalize()
     salary = int(input(f"Enter salary for {nameValue}:"))
-    # salary = 50000
+    # salary = 20000
     finalDF = create_loan(complete_String)
     data_df = pd.DataFrame.from_dict(finalDF)
     data_df['open'] = data_df['open'].map({
@@ -403,6 +404,7 @@ for file in pdf_files:
     }
     total_dict = pd.DataFrame(total_dict,index=[0])
     data_df = pd.concat([data_df,total_dict],ignore_index=False)
+    show_df = pd.concat([show_df,total_dict],ignore_index=False)
     pivot_df = pd.pivot_table(data_df,index = ["Products"], values=['Sanction/Credit Limit','Balance','EMI','Paid Principle','Delinquencies'], aggfunc=np.sum, fill_value=0)
     pivot_df['FOIR'] = FOIR
     pivot_df['Disposable'] = disposable
@@ -415,7 +417,7 @@ for file in pdf_files:
     # RECOMMENDATIONS
     new_df = data_df.copy()
     recommendation_string = ""
-    if(info_df['Credit Score']>650):
+    if(info_df['Credit Score'][0]>0):
         new_pl=0
         if(disposable>0):
             new_pl = int(get_new_PL(disposable))
