@@ -242,7 +242,6 @@ def save_as_csv(data_df:pd.DataFrame,pivot_df:pd.DataFrame,csv,filename,info_df:
                     case_df.to_excel(writer,sheet_name='Case 1',index=False)
             else:
                 pass
-
 def create_loan(text:str):
     completeDF = {"Products":[],"Loan Institution":[],"date_opened":[],"Sanction/Credit Limit":[],"Balance":[],"EMI":[],"Paid Principle":[],"open":[],"Delinquencies":[]}
     delinquenciesCount = 0
@@ -381,7 +380,6 @@ for file in pdf_files:
     data_df = data_df.loc[data_df['open']>0]
     # drop row where balance is 0 and Delinquencies is true and emi is 0
     data_df = data_df.loc[(data_df['Balance']!=0) | (data_df['Delinquencies']>0)]
-    print(data_df)
     # emi == 0
     data_df['Paid Principle'] = data_df['Paid Principle'].apply(lambda x: 0 if x<0 else x)
     if(salary <= 50000):
